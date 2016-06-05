@@ -1,10 +1,5 @@
-```
-          ______
-         // /  _/
-    __  // // /    A Java shell and lightweight build tool
-   // /_/ // /                Version 0.0.1
-   \\____/___/
-```
+<img src='title.png'>
+
 Java Interrupted or JI is a lightweight build tool that provides a shell for running short Java
 scripts similar to the Python shell. Additionally JI can be used to quickly compile and run
 local Java files. In practice this means you can do stuff like
@@ -82,7 +77,7 @@ lines of code.
 
 #### Statements
 
-Statements are like expressions but permanent. Statmenets are indicated by a semicolon at the end of an 
+Statements are like expressions but permanent. Statements are indicated by a semicolon at the end of an 
 expression. Statements will only echo a value if a print call is made within the statment. Below is an example
 of using a statement to define a variable and then using an expression to get the value of that variable.
 
@@ -152,22 +147,54 @@ an example of implementing a simple Point class.
 (0, 0)
 ```
 
+Interfaces can also be defined and used just like classes are.
+
 #### Built-ins
 
-There are a couple built in functions to help improve the shell experience. The first is a `source()` function
-which allows you to view previous definitions of methods and classes. Below is an example of this function in 
-use.
+There are a couple built in functions to help improve the shell experience. The first is the `source()` or
+`src()` function which allows you to view previous definitions of methods and classes. Below is an example 
+of this function in use.
 
 ```
 >>src( increment )
 int increment( int x ) {
-return x + 1;
+    return x + 1;
 }
+```
 
+The `clear()` or `clr()` function will remove all statements from the Shell leaving only method and class
+definitions. This is useful if you have statements which are printing information everytime you enter a new 
+expression.
 
+```
+>>System.out.println( "Hello World" );
+Hello World
+>>1 + 1
+Hello World
+2
+>>clr()
+
+>>
 ```
 
 Additionally you can exit the shell by typing `exit()` or `System.out.exit()`.
+## Changelog
+
+**0.0.1** 
+
+- Initial release
+
+**0.0.2**
+
+- Added support for loops as statements
+- Added support for interfaces
+- Improved formatting when printing source and proper tab expansion
+- Added a clear command for removing statments 
+- The source command will now return JI source when no arguments are passed
+- Improved method and class/interface regexes
+- Fixed minor color bugs
+- Added unit tests
+
 ## Contact
 
 JI is maintained by Eric Buss. You can send questions and bug reports to ejrbuss@shaw.ca

@@ -45,37 +45,32 @@ files = []
 # The template format for JI.java
 template = """
 `imports`
-
 public class JI {
 
-public static void main( String[] args ) {
-    `statements`
-    `expression`
-}
+    public static void main( String[] args ) {
+        `statements`
+        `expression`
+    }
 
-`methods`
-
+    `methods`
 }
 """
 #======================================================================================================================#
 # API
 #======================================================================================================================#
-def ji(args):
+def ji(args=None):
     """
     Takes a list of .java files. Compiles the list of files and if all files compiled successfully runs the first file
     in the list. If the list is empty this function will start up a CodeInstance similar to the Python interpreter.
 
     :param args: A list of .java files
     """
-    if len(args) > 0:
+    if args:
         compiled = True
-        color(colorama.Fore.MAGENTA)
         for file in args:
-            compiled &= subprocess.call(javac + ' ' + file) == 0
+            compiled &= run(javac + ' ' + file, colorama.Fore.MAGENTA) == 0
         if compiled:
-            color(colorama.Fore.GREEN)
-            subprocess.call(java + ' ' + args[0].replace('.java', ''))
-        color(colorama.Fore.RESET)
+            run(java + ' ' + args[0].replace('.java', ''), colorama.Fore.GREEN)
     else:
         ci = CodeInstance()
         while True:
@@ -105,14 +100,14 @@ def color_print(color, arg, newline=True):
     else:
         sys.stdout.write(color + arg + colorama.Fore.RESET + ('\n' if newline else ''))
 
-def color(color):
-    """
-    Sets the foreground color with a given color from colorama.
-
-    :param color: The foreground color
-    """
-    if not nocolor:
+def run(cmd, color=colorama.Fore.RESET, cwd=os.curdir):
+    if nocolor:
+        exit_code = subprocess.call(cmd, cwd=cwd)
+    else:
         sys.stdout.write(color)
+        exit_code = subprocess.call(cmd, cwd=cwd)
+        sys.stdout.write(colorama.Fore.RESET)
+    return exit_code
 
 class CodeInstance:
     """
@@ -132,7 +127,15 @@ class CodeInstance:
         self._expression_ = ''
         self._methods_ = ''
         self._cached_methods_ = ''
-        self._source_ = {}
+        self._source_ = {'': str(self)}
+
+    def __repr__(self):
+        return str(template
+            .replace('`imports`', self._imports_)
+            .replace('`statements`', self._statements_.replace('\n', '\n\t\t').expandtabs(4))
+            .replace('`expression`', self._expression_.replace('\n', '\n\t\t').expandtabs(4))
+            .replace('`methods`', self._methods_.replace('\n', '\n\t').expandtabs(4))
+        )
 
     def listen(self):
         """
@@ -141,13 +144,13 @@ class CodeInstance:
         java() to run the main JI class.
         """
         color_print(colorama.Fore.MAGENTA, '>>', newline=False)
-        line = str(input()).strip()
+        line = str(input()).rstrip()
         self._buffer_ += line + '\n'
-        if line.endswith('}'):
+        if line.strip().endswith('}') or line.strip().startswith('}'):
             self._nested_ -= 1
-        elif line.endswith('{'):
+        elif line.strip().endswith('{'):
             self._nested_ += 1
-        if self._nested_ == 0:
+        if self._nested_ == 0 and not re.match(r'\s*((for)|(while))\s*\(.*\)\s*', line):
             self.out()
             self.javac()
             self.java()
@@ -160,35 +163,40 @@ class CodeInstance:
         code of a class or function with the given name, exit() ends the JI process.
         """
         pop = self._buffer_.split('\n')[0].strip()
-        if re.match(r'(source)|(src)\(.*\)', pop):
-            identifier = re.sub(r'.*\((.*)\)', r'\1', pop)
+        if re.match(r'(source)|(src)\(.*\);?', pop):
+            identifier = re.sub(r'.*\((.*)\);?', r'\1', pop)
             log('source[' + pop + ']')
-            color_print(colorama.Fore.GREEN, self._source_[identifier])
+            color_print(colorama.Fore.GREEN, self._source_[identifier].expandtabs(4), newline=False)
             self._buffer_ = ''
-        if re.match(r'(exit)|(exit\(\))|(System.exit\(\))', pop):
+        elif re.match(r'(clr)|(clear)|(clear\(\));?', pop):
+            self._statements_ = ''
+            self._cached_statements_ = ''
+            self._expression_ = ''
+            self._buffer_ = ''
+        elif re.match(r'(exit)|(exit\(\))|(System.exit\(\));?', pop):
             color_print(colorama.Fore.MAGENTA, '\n\tGoodbye ^.^')
             exit()
-        if re.match(r'\s*import.*', pop):
+        elif re.match(r'\s*import.*;', pop):
             imports = re.sub(r'\s*import\s*(.*);', r'\1', pop)
             log('import[' + imports + ']')
             self._imports_ += self._buffer_ + '\n'
             self._expression_ = ''
-        elif re.match(r'\s*((public)|(private)|(protected))?\s*(static)?\s*.*\(.*\).*\{', pop):
+        elif not re.match(r'(for)|(do)|(while).*', pop) and re.match(r'.*\(.*\)\s*\{', pop):
             method_name = re.sub(r'.*\s+(.*)\(.*', r'\1', pop)
             log('method[' + method_name + ']')
             self._methods_ += self._buffer_ + '\n'
             self._source_[method_name] = self._buffer_
             self._expression_ = ''
-        elif re.match(r'\s*(public)?\s*class.*', pop):
-            class_name = re.sub(r'(public)?\s*class\s*([^\s]*)\s*\{', r'\2', pop)
+        elif re.match(r'.*((class)|(interface))\s+.*\{', pop):
+            class_name = re.sub(r'.*((class)|(interface))\s+([^\s]*)\s*.*\{', r'\4', pop)
             log('class[' + class_name + ']')
-            self._source_[class_name] += self._buffer_
+            self._source_[class_name] = self._buffer_
             files.append(class_name + '.java')
             with open(dir + '/' + class_name + '.java', 'w') as writer:
                 writer.write(self._buffer_)
             self._expression_ = ''
         else:
-            self._expression_ = self._buffer_.strip()
+            self._expression_ = self._buffer_.rstrip()
 
     def javac(self):
         """
@@ -197,25 +205,19 @@ class CodeInstance:
         a semicolon. All class files are recompiled. If JI.java fails to compile the last successful imports, methods,
         and statements (cached) are retrieved and recompiled.
         """
-        if not self._expression_.endswith(';'):
-            log('expression[' + self._expression_ + ']')
-            self._expression_ = 'System.out.println( ' + self._expression_ + ' );'
-        else:
+        if self._expression_.endswith(';') or self._expression_.endswith('}'):
             log('statement[ ' + self._expression_ + ']')
             self._statements_ += self._expression_ + '\n'
             self._expression_ = ''
+        else:
+            log('expression[' + self._expression_ + ']')
+            self._expression_ = 'System.out.println( ' + self._expression_ + ' );'
         with open(dir + '/JI.java', 'w') as writer:
-            writer.write(template
-                .replace('`imports`', self._imports_)
-                .replace('`statements`', self._statements_)
-                .replace('`expression`', self._expression_)
-                .replace('`methods`', self._methods_)
-            )
-        color(colorama.Fore.MAGENTA)
+            writer.write(str(self))
         for file in files:
-            if subprocess.call(javac + ' ' + file, cwd=dir) != 0:
+            if run(javac + ' ' + file, colorama.Fore.MAGENTA, dir) != 0:
                 os.remove(os.path.join(dir, file))
-        if subprocess.call(javac + ' JI.java', cwd=dir) != 0:
+        if run(javac + ' JI.java', colorama.Fore.MAGENTA, dir) != 0:
             self._imports_ = self._cached_imports_
             self._methods_ = self._cached_methods_
             self._statements_ = self._cached_statements_
@@ -227,8 +229,7 @@ class CodeInstance:
         Runs JI.class. If the code returns an exit code other than 0 the last successful imports, methods, and
         statements (cached) are retrieved.
         """
-        color(colorama.Fore.GREEN)
-        if subprocess.call(java + ' JI', cwd=dir) != 0:
+        if run(java + ' JI', colorama.Fore.GREEN, dir) != 0:
             self._imports_ = self._cached_imports_
             self._methods_ = self._cached_methods_
             self._statements_ = self._cached_statements_
@@ -236,6 +237,7 @@ class CodeInstance:
         self._cached_methods_ = self._methods_
         self._cached_statements_ = self._statements_
         self._buffer_ = ''
+        self._source_[''] = str(self)
 #======================================================================================================================#
 # SCRIPT
 #======================================================================================================================#
@@ -253,15 +255,12 @@ if __name__ == '__main__':
     -v --version      Print the version number
     -q --quiet        Run in quiet mode
     -a --all          Compile all .java files in the cwd
-    -i --interactive  After running the Java file open it in the interpreter
     -d --debug        Enable debug mode
         """)
         exit()
     if '-a' in sys.argv or '--all' in sys.argv:
         for file in [file for file in os.listdir(os.path.curdir) if str(file).endswith('.java')]:
-            subprocess.call(javac + ' ' + file)
-    if '-i' in sys.argv or '--interactive' in sys.argv:
-        pass # TODO implement interactive mode
+            run(javac + ' ' + file, colorama.Fore.MAGENTA)
     if '-d' in sys.argv or '--debug' in sys.argv:
         debug = True
     ji([arg for arg in sys.argv if str(arg).endswith('.java')])
