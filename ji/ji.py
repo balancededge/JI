@@ -3,7 +3,7 @@ title = """
           ______
          // /  _/
     __  // // /    A Java shell and lightweight build tool
-   // /_/ // /                Version 0.0.1
+   // /_/ // /                Version 0.0.3
    \\\\____/___/
 """
 #======================================================================================================================#
@@ -40,8 +40,6 @@ except ImportError:
 #======================================================================================================================#
 # GLOBALS
 #======================================================================================================================#
-# A list of files that are compiled prior to running JI.java
-files = []
 # The template format for JI.java
 template = """
 `imports`
@@ -101,6 +99,15 @@ def color_print(color, arg, newline=True):
         sys.stdout.write(color + arg + colorama.Fore.RESET + ('\n' if newline else ''))
 
 def run(cmd, color=colorama.Fore.RESET, cwd=os.curdir):
+    """
+    Runs a command using subprocess. A color can be specified for the output of the command and it will be reset when
+    the function returns. Returns the exit code of the command.
+
+    :param cmd: The command to run
+    :param color: The color to display the output in
+    :param cwd: The cwd of the command
+    :return: The command's exit code
+    """
     if nocolor:
         exit_code = subprocess.call(cmd, cwd=cwd)
     else:
@@ -148,12 +155,13 @@ class CodeInstance:
         self._buffer_ += line + '\n'
         if line.strip().endswith('}') or line.strip().startswith('}'):
             self._nested_ -= 1
-        elif line.strip().endswith('{'):
+        if line.strip().endswith('{'):
             self._nested_ += 1
-        if self._nested_ == 0 and not re.match(r'\s*((for)|(while))\s*\(.*\)\s*', line):
+        if self._nested_ == 0 and not re.match(r'\s*((if)|(for)|(while))\s*\(.*\)\s*', line):
             self.out()
             self.javac()
             self.java()
+        log('nested[' + str(self._nested_) + ']')
 
     def out(self):
         """
@@ -164,7 +172,7 @@ class CodeInstance:
         """
         pop = self._buffer_.split('\n')[0].strip()
         if re.match(r'(source)|(src)\(.*\);?', pop):
-            identifier = re.sub(r'.*\((.*)\);?', r'\1', pop)
+            identifier = re.sub(r'.*\((.*)\);?', r'\1', pop).strip()
             log('source[' + pop + ']')
             color_print(colorama.Fore.GREEN, self._source_[identifier].expandtabs(4), newline=False)
             self._buffer_ = ''
@@ -181,7 +189,7 @@ class CodeInstance:
             log('import[' + imports + ']')
             self._imports_ += self._buffer_ + '\n'
             self._expression_ = ''
-        elif not re.match(r'(for)|(do)|(while).*', pop) and re.match(r'.*\(.*\)\s*\{', pop):
+        elif not re.match(r'(if)|(for)|(do)|(while).*', pop) and re.match(r'.*\(.*\)\s*\{', pop):
             method_name = re.sub(r'.*\s+(.*)\(.*', r'\1', pop)
             log('method[' + method_name + ']')
             self._methods_ += self._buffer_ + '\n'
@@ -191,9 +199,10 @@ class CodeInstance:
             class_name = re.sub(r'.*((class)|(interface))\s+([^\s]*)\s*.*\{', r'\4', pop)
             log('class[' + class_name + ']')
             self._source_[class_name] = self._buffer_
-            files.append(class_name + '.java')
             with open(dir + '/' + class_name + '.java', 'w') as writer:
                 writer.write(self._buffer_)
+            if run(javac + ' ' + class_name + '.java', colorama.Fore.MAGENTA, cwd=dir) != 0:
+                os.remove(os.path.join(dir, file))
             self._expression_ = ''
         else:
             self._expression_ = self._buffer_.rstrip()
@@ -208,15 +217,15 @@ class CodeInstance:
         if self._expression_.endswith(';') or self._expression_.endswith('}'):
             log('statement[ ' + self._expression_ + ']')
             self._statements_ += self._expression_ + '\n'
-            self._expression_ = ''
+            self._expression_ = 'System.out.println();'
+        elif self._expression_.strip().startswith('if'):
+            log('expression[' + self._expression_ + ']')
+            self._expression_ = self._expression_.split('\n')[0] + '\n\tSystem.out.println( ' + self._expression_.split('\n')[1] + ' );'
         else:
             log('expression[' + self._expression_ + ']')
             self._expression_ = 'System.out.println( ' + self._expression_ + ' );'
         with open(dir + '/JI.java', 'w') as writer:
             writer.write(str(self))
-        for file in files:
-            if run(javac + ' ' + file, colorama.Fore.MAGENTA, dir) != 0:
-                os.remove(os.path.join(dir, file))
         if run(javac + ' JI.java', colorama.Fore.MAGENTA, dir) != 0:
             self._imports_ = self._cached_imports_
             self._methods_ = self._cached_methods_

@@ -78,6 +78,16 @@ class TestJI(unittest.TestCase):
             '7'
         )
 
+    def test_if_expression(self):
+        self.run_code(
+            """
+            int x = 7;
+            if ( x == 7 )
+                x
+            """,
+            '7'
+        )
+
     def test_statement(self):
         self.run_code(
             """
@@ -85,6 +95,43 @@ class TestJI(unittest.TestCase):
             x
             """,
             '4'
+        )
+
+    def test_if(self):
+        self.run_code(
+            """
+            boolean x = true;
+            if ( x ) {
+                System.out.println( x );
+            }""",
+            'true'
+        )
+
+    def test_unbraced_if(self):
+        self.run_code(
+            """
+            int x = 12;
+            if ( x < 5 )
+                System.out.println( x );
+            """,
+            ''
+        )
+
+    def test_try_catch(self):
+        self.run_code(
+            """
+            int[] A = {1, 2, 3, 4};
+            static int test( int[] A ) {
+                try {
+                    int a = A[-1];
+                } catch( Exception e ) {
+                    return 1;
+                }
+                return 0;
+            }
+            test( A )
+            """,
+            '1'
         )
 
     def test_braced_for(self):
