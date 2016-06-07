@@ -48,7 +48,7 @@ class TestJI(unittest.TestCase):
 
     def run_code(self, input, output):
         """
-        Runs a code snippet and checks to see if the result is equals to the provided output.
+        Runs a code snippet and checks to see if the result is equal to the provided output.
 
         :param input: The code to run
         :param output: The expected output

@@ -3,7 +3,7 @@ title = """
           ______
          // /  _/
     __  // // /    A Java shell and lightweight build tool
-   // /_/ // /                Version 0.0.3
+   // /_/ // /                Version 0.0.4
    \\\\____/___/
 """
 #======================================================================================================================#
@@ -12,6 +12,7 @@ title = """
 import re
 import os
 import sys
+import shutil
 import subprocess
 #======================================================================================================================#
 # CONFIGURATION
@@ -56,27 +57,26 @@ public class JI {
 #======================================================================================================================#
 # API
 #======================================================================================================================#
-def ji(args=None):
+def ji(file=None, interact=False, args=''):
     """
     Takes a list of .java files. Compiles the list of files and if all files compiled successfully runs the first file
     in the list. If the list is empty this function will start up a CodeInstance similar to the Python interpreter.
 
     :param args: A list of .java files
     """
-    if args:
-        compiled = True
-        for file in args:
-            compiled &= run(javac + ' ' + file, colorama.Fore.MAGENTA) == 0
-        if compiled:
-            run(java + ' ' + args[0].replace('.java', ''), colorama.Fore.GREEN)
-    else:
+    if file is not None:
+        if run(javac + ' ' + file, colorama.Fore.MAGENTA) == 0:
+            class_file = os.path.basename(file).replace('.java', '.class')
+            shutil.copy(class_file, os.path.join(dir, class_file))
+            run(java + ' ' + class_file.replace('.class', '') + ' ' + args, colorama.Fore.GREEN)
+    if file == None or interact:
         ci = CodeInstance()
         while True:
             ci.listen()
 
 def log(arg):
     """
-    Prints the passed arg when in debug mode. Debug messages appear in read.
+    Prints the passed arg when in debug mode. Debug messages appear in red.
 
     :param arg: The debug message
     """
@@ -175,7 +175,7 @@ class CodeInstance:
             identifier = re.sub(r'.*\((.*)\);?', r'\1', pop).strip()
             log('source[' + pop + ']')
             color_print(colorama.Fore.GREEN, self._source_[identifier].expandtabs(4), newline=False)
-            self._buffer_ = ''
+            self._expression_ = ''
         elif re.match(r'(clr)|(clear)|(clear\(\));?', pop):
             self._statements_ = ''
             self._cached_statements_ = ''
@@ -250,26 +250,49 @@ class CodeInstance:
 #======================================================================================================================#
 # SCRIPT
 #======================================================================================================================#
+def parse_args(argv):
+    """
+
+    :param argv:
+    :return:
+    """
+    split = len(argv) - 1
+    for i in range(len(sys.argv)):
+        if argv[i].endswith('.java'):
+            split = i
+    args = argv[:split]
+    program = argv[split] if argv[split].endswith('.java') else None
+    program_args = ' '.join(argv[split + 1:] if len(argv) > split else [])
+    return args, program, program_args
+
 if __name__ == '__main__':
     # Parse command line options
-    if '-q' not in sys.argv and '--quiet' not in sys.argv:
+    args, program, program_args = parse_args(sys.argv)
+    if '-q' not in args and '--quiet' not in args:
         colorama.init()
         color_print(colorama.Fore.MAGENTA, title)
-    if '-v' in sys.argv or '--version' is sys.argv:
+    if '-v' in args or '--version' is args:
         exit()
-    if '-h' in sys.argv or '--help' in sys.argv:
+    if '-h' in args or '--help' in args:
         color_print(colorama.Fore.MAGENTA, """
-        Usage: $ ji [options][java files...]
+        Usage: $ ji [options][java file][program args]
 
     -v --version      Print the version number
     -q --quiet        Run in quiet mode
+    -i --interactive  Run the JI shell after .java file
     -a --all          Compile all .java files in the cwd
     -d --debug        Enable debug mode
         """)
         exit()
-    if '-a' in sys.argv or '--all' in sys.argv:
+    if '-a' in args or '--all' in args:
         for file in [file for file in os.listdir(os.path.curdir) if str(file).endswith('.java')]:
             run(javac + ' ' + file, colorama.Fore.MAGENTA)
-    if '-d' in sys.argv or '--debug' in sys.argv:
+        exit()
+    if '-d' in args or '--debug' in args:
         debug = True
-    ji([arg for arg in sys.argv if str(arg).endswith('.java')])
+    for file in [file for file in os.listdir(os.path.curdir) if str(file).endswith('.class')]:
+        shutil.copy(file, os.path.join(dir, os.path.basename(file)))
+    log('args' + str(args))
+    log('program[' + str(program) + ']')
+    log('program_args[' + str(program_args) + ']')
+    ji(program, '-i' in args or '--interactive' in args, program_args)

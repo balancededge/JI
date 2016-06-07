@@ -3,11 +3,13 @@
 public class JI {
 
     public static void main( String[] args ) {
-                    int i = 12;
-                    while( i-- >= 8 )
-                        System.out.println( i );
+        double MARR = 0.15;
+        double N = 50;
+        double initialCose = -80000;
+        double annualRevenue = 20000;
+        double salvage = 10000;
         
-        System.out.println();
+        System.out.println(  );
     }
 
     
